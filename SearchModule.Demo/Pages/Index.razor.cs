@@ -2,11 +2,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace SearchModule.Demo.Pages
 {
     public partial class Index
     {
+        [Inject] private IJSRuntime JS { get; set; }
+
         private string searchQuery = "";
         private string lang = "fr";
         private string theme = "dark";
@@ -84,6 +87,12 @@ namespace SearchModule.Demo.Pages
         // --- Actions ---
 
         private void SetLang(string newLang) { lang = newLang; }
+
+        private async void SetTheme(string newTheme)
+        {
+            theme = newTheme;
+            await JS.InvokeVoidAsync("setBodyTheme", theme);
+        }
 
         private void SetTab(string tab)
         {

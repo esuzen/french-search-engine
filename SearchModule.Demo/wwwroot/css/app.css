@@ -20,7 +20,7 @@
 }
 
 /* Light theme */
-.light {
+body.light {
     --bg: #f5f6fa;
     --surface: #ffffff;
     --surface-hover: #f0f1f5;

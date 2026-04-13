@@ -16,5 +16,10 @@
     </div>
 
     <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        window.setBodyTheme = function(theme) {
+            document.body.className = theme === 'light' ? 'light' : '';
+        };
+    </script>
 </body>
 </html>

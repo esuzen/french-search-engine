@@ -1,14 +1,14 @@
 @page "/"
 
-<div class="page @(theme == "light" ? "light" : "")">
+<div class="page">
     <div class="top-bar">
         <div class="toggle-group">
             <span class="@(lang == "fr" ? "toggle-active" : "toggle-btn")" @onclick='() => SetLang("fr")'>FR</span>
             <span class="@(lang == "en" ? "toggle-active" : "toggle-btn")" @onclick='() => SetLang("en")'>EN</span>
         </div>
         <div class="toggle-group">
-            <span class="@(theme == "dark" ? "toggle-active" : "toggle-btn")" @onclick='() => theme = "dark"'>&#9790;</span>
-            <span class="@(theme == "light" ? "toggle-active" : "toggle-btn")" @onclick='() => theme = "light"'>&#9788;</span>
+            <span class="@(theme == "dark" ? "toggle-active" : "toggle-btn")" @onclick='() => SetTheme("dark")'>&#9790;</span>
+            <span class="@(theme == "light" ? "toggle-active" : "toggle-btn")" @onclick='() => SetTheme("light")'>&#9788;</span>
         </div>
     </div>
 
