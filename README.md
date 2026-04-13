@@ -4,6 +4,8 @@ A multi-algorithm text search engine for .NET, optimized for French language.
 
 [![CI](https://github.com/esuzen/french-search-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/esuzen/french-search-engine/actions/workflows/ci.yml)
 
+**[Live Demo](https://esuzen.github.io/french-search-engine/)** — Try it in your browser, powered by WebAssembly
+
 ## Features
 
 SearchModule combines five search strategies, ranked by relevance:
