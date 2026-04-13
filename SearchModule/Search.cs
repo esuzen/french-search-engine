@@ -219,7 +219,13 @@ namespace SearchModule
 
                             if (phoneticMatch)
                             {
-                                TryAddResult(obj, (int)ResultCategories.Paronym, CompareTwoWords(searchString, word));
+                                // Guard against Soundex false positives:
+                                // reject if character overlap is too low
+                                double sim = CompareTwoWords(searchString, word);
+                                if (sim >= 30)
+                                {
+                                    TryAddResult(obj, (int)ResultCategories.Paronym, sim);
+                                }
                                 continue;
                             }
                         }
