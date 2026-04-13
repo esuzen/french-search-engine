@@ -58,7 +58,7 @@ namespace SearchModule.Demo.Pages
 
         private static readonly Dictionary<string, string[]> examples = new()
         {
-            ["people"] = new[] { "dupon", "farmacien", "filosof", "marseil", "boulangé", "medsin", "archi", "sof" },
+            ["people"] = new[] { "dupon", "farmacien", "filosof", "marseil", "boulangé", "medsin", "archi", "sophi" },
             ["elements"] = new[] { "idrogène", "hélium", "karbone", "oksygène", "azot", "soufr", "silicium", "magnez" },
             ["vaccines"] = new[] { "paracetamole", "amoksiciline", "ibuprofène", "dolipran", "vaksin", "pénicil", "aspiryne", "insulyne" },
             ["cities"] = new[] { "marseil", "toulous", "bordo", "strasbour", "monpelié", "nante", "ren", "lil" },

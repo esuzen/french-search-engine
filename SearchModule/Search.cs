@@ -22,7 +22,7 @@ namespace SearchModule
         public double SoundexTolerance { get; set; } = 0.0001;
 
         /// <summary>Minimum similarity percentage (0-100) for Levenshtein-based matching.</summary>
-        public double SimilarityTolerance { get; set; } = 79;
+        public double SimilarityTolerance { get; set; } = 68;
 
         /// <summary>Maximum Levenshtein distance to consider two words similar.</summary>
         public int MaxLevenshteinDistance { get; set; } = 5;
