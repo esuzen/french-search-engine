@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Microsoft.AspNetCore.Components;
 
 namespace SearchModule.Demo.Pages
@@ -7,26 +8,79 @@ namespace SearchModule.Demo.Pages
     public partial class Index
     {
         private string searchQuery = "";
-        private List<SearchResult<Person>> results = new();
+        private string lang = "fr";
+        private string activeTab = "people";
+        private List<SearchResult<DemoItem>> results = new();
         private long elapsedMs = 0;
 
-        private static readonly string[] exampleQueries = new[]
+        // --- Localization ---
+
+        private static readonly Dictionary<string, Dictionary<string, string>> i18n = new()
         {
-            "farmaci",      // phonetic: pharmacien
-            "dupon",        // similar: dupont
-            "filosof",      // phonetic: philosophe
-            "marseil",      // prefix: marseille
-            "boulangé",     // accent: boulanger
-            "medsin",       // phonetic: medecin
-            "toulous",      // prefix: toulouse
-            "informat",     // prefix: informaticien
-            "sof",          // prefix: sophie
-            "archi",        // prefix: architecte
+            ["title"] = new() { ["fr"] = "Moteur de Recherche Francais", ["en"] = "French Search Engine" },
+            ["subtitle"] = new() { ["fr"] = "Recherche multi-algorithme avec correspondance phonetique Soundex", ["en"] = "Multi-algorithm search with French Soundex phonetic matching" },
+            ["results"] = new() { ["fr"] = "resultats", ["en"] = "results" },
+            ["no_results"] = new() { ["fr"] = "Aucun resultat pour", ["en"] = "No results for" },
+            ["try_examples"] = new() { ["fr"] = "Essayez ces exemples", ["en"] = "Try these examples" },
+            ["powered_by"] = new() { ["fr"] = "Propulse par", ["en"] = "Powered by" },
+            ["powered_wasm"] = new() { ["fr"] = "— tourne entierement dans votre navigateur via WebAssembly", ["en"] = "— running entirely in your browser via WebAssembly" },
         };
 
-        private static readonly List<Person> dataset = BuildDataset();
+        private string L(string key) => i18n.ContainsKey(key) && i18n[key].ContainsKey(lang) ? i18n[key][lang] : key;
 
-        private static readonly string[] filters = new[] { "FirstName", "LastName", "City", "Profession" };
+        // --- Dataset tabs ---
+
+        private static readonly Dictionary<string, Dictionary<string, string>> datasetTabs = new()
+        {
+            ["people"] = new() { ["fr"] = "Personnes", ["en"] = "People" },
+            ["elements"] = new() { ["fr"] = "Elements chimiques", ["en"] = "Chemical elements" },
+            ["vaccines"] = new() { ["fr"] = "Vaccins & medicaments", ["en"] = "Vaccines & medicine" },
+            ["cities"] = new() { ["fr"] = "Villes de France", ["en"] = "French cities" },
+        };
+
+        private static readonly string[] filters = new[] { "Name", "Detail", "Category" };
+
+        // --- Examples per tab ---
+
+        private static readonly Dictionary<string, string[]> examples = new()
+        {
+            ["people"] = new[] { "dupon", "farmacien", "filosof", "marseil", "boulangé", "medsin", "archi", "sof" },
+            ["elements"] = new[] { "idrogène", "hélium", "karbone", "oksygène", "azot", "soufr", "silicium", "magnez" },
+            ["vaccines"] = new[] { "paracetamole", "amoksiciline", "ibuprofène", "dolipran", "vaksin", "pénicil", "aspiryne", "insulyne" },
+            ["cities"] = new[] { "marseil", "toulous", "bordo", "strasbour", "monpelié", "nante", "ren", "lil" },
+        };
+
+        private string[] GetExamples() => examples.ContainsKey(activeTab) ? examples[activeTab] : examples["people"];
+
+        private string GetPlaceholder() => activeTab switch
+        {
+            "people" => lang == "fr" ? "Cherchez un nom, une ville, un metier..." : "Search a name, city, profession...",
+            "elements" => lang == "fr" ? "Cherchez un element chimique..." : "Search a chemical element...",
+            "vaccines" => lang == "fr" ? "Cherchez un vaccin ou medicament..." : "Search a vaccine or medicine...",
+            "cities" => lang == "fr" ? "Cherchez une ville de France..." : "Search a French city...",
+            _ => ""
+        };
+
+        private string GetEmptyText() => activeTab switch
+        {
+            "people" => lang == "fr" ? "Tapez un nom, une ville ou un metier pour chercher parmi 90 fiches" : "Type a name, city, or profession to search across 90 entries",
+            "elements" => lang == "fr" ? "Tapez un nom d'element pour chercher dans le tableau periodique" : "Type an element name to search the periodic table",
+            "vaccines" => lang == "fr" ? "Tapez un nom de vaccin ou medicament" : "Type a vaccine or medicine name",
+            "cities" => lang == "fr" ? "Tapez un nom de ville francaise" : "Type a French city name",
+            _ => ""
+        };
+
+        // --- Actions ---
+
+        private void SetLang(string newLang) { lang = newLang; }
+
+        private void SetTab(string tab)
+        {
+            activeTab = tab;
+            searchQuery = "";
+            results = new();
+            elapsedMs = 0;
+        }
 
         private void OnSearch(ChangeEventArgs e)
         {
@@ -49,11 +103,23 @@ namespace SearchModule.Demo.Pages
                 return;
             }
 
+            var data = GetActiveDataset();
             var sw = Stopwatch.StartNew();
-            results = Search.SearchValues(searchQuery, filters, dataset);
+            results = Search.SearchValues(searchQuery, filters, data);
             sw.Stop();
             elapsedMs = sw.ElapsedMilliseconds;
         }
+
+        private List<DemoItem> GetActiveDataset() => activeTab switch
+        {
+            "people" => peopleData,
+            "elements" => elementsData,
+            "vaccines" => vaccinesData,
+            "cities" => citiesData,
+            _ => peopleData
+        };
+
+        // --- Display ---
 
         private static string GetCategoryName(int category) => category switch
         {
@@ -85,134 +151,233 @@ namespace SearchModule.Demo.Pages
             _ => "#888"
         };
 
-        private static string GetDisplayName(Person p) => $"{p.FirstName} {p.LastName}";
-        private static string GetDisplayDetail(Person p) => $"{p.Profession} - {p.City}";
+        private static string GetDisplayName(DemoItem item) => item.Name;
+        private static string GetDisplayDetail(DemoItem item) =>
+            string.IsNullOrEmpty(item.Category) ? item.Detail : $"{item.Detail} — {item.Category}";
 
-        private static List<Person> BuildDataset()
+        // =====================================================
+        //                    DATASETS
+        // =====================================================
+
+        private static readonly List<DemoItem> peopleData = new()
         {
-            return new List<Person>
-            {
-                // Paris
-                new() { FirstName = "Jean", LastName = "Dupont", City = "Paris", Profession = "Informaticien" },
-                new() { FirstName = "Marie", LastName = "Martin", City = "Paris", Profession = "Pharmacienne" },
-                new() { FirstName = "Pierre", LastName = "Durand", City = "Paris", Profession = "Architecte" },
-                new() { FirstName = "Sophie", LastName = "Bernard", City = "Paris", Profession = "Avocate" },
-                new() { FirstName = "Nicolas", LastName = "Thomas", City = "Paris", Profession = "Boulanger" },
-                new() { FirstName = "Catherine", LastName = "Robert", City = "Paris", Profession = "Medecin" },
-                new() { FirstName = "Philippe", LastName = "Richard", City = "Paris", Profession = "Philosophe" },
-                new() { FirstName = "Isabelle", LastName = "Petit", City = "Paris", Profession = "Journaliste" },
-                new() { FirstName = "Laurent", LastName = "Moreau", City = "Paris", Profession = "Ingenieur" },
-                new() { FirstName = "Nathalie", LastName = "Simon", City = "Paris", Profession = "Professeur" },
-                new() { FirstName = "Francois", LastName = "Michel", City = "Paris", Profession = "Comptable" },
-                new() { FirstName = "Sylvie", LastName = "Leroy", City = "Paris", Profession = "Dentiste" },
-                new() { FirstName = "Christophe", LastName = "Roux", City = "Paris", Profession = "Photographe" },
-                new() { FirstName = "Veronique", LastName = "David", City = "Paris", Profession = "Psychologue" },
-                new() { FirstName = "Thierry", LastName = "Bertrand", City = "Paris", Profession = "Plombier" },
+            new() { Name = "Jean Dupont", Detail = "Paris", Category = "Informaticien" },
+            new() { Name = "Marie Martin", Detail = "Paris", Category = "Pharmacienne" },
+            new() { Name = "Pierre Durand", Detail = "Paris", Category = "Architecte" },
+            new() { Name = "Sophie Bernard", Detail = "Paris", Category = "Avocate" },
+            new() { Name = "Nicolas Thomas", Detail = "Paris", Category = "Boulanger" },
+            new() { Name = "Catherine Robert", Detail = "Paris", Category = "Medecin" },
+            new() { Name = "Philippe Richard", Detail = "Paris", Category = "Philosophe" },
+            new() { Name = "Isabelle Petit", Detail = "Paris", Category = "Journaliste" },
+            new() { Name = "Laurent Moreau", Detail = "Paris", Category = "Ingenieur" },
+            new() { Name = "Nathalie Simon", Detail = "Paris", Category = "Professeur" },
+            new() { Name = "Francois Michel", Detail = "Paris", Category = "Comptable" },
+            new() { Name = "Sylvie Leroy", Detail = "Paris", Category = "Dentiste" },
+            new() { Name = "Christophe Roux", Detail = "Paris", Category = "Photographe" },
+            new() { Name = "Veronique David", Detail = "Paris", Category = "Psychologue" },
+            new() { Name = "Thierry Bertrand", Detail = "Paris", Category = "Plombier" },
+            new() { Name = "Antoine Garcia", Detail = "Marseille", Category = "Pecheur" },
+            new() { Name = "Camille Martinez", Detail = "Marseille", Category = "Restaurateur" },
+            new() { Name = "Julien Lopez", Detail = "Marseille", Category = "Marin" },
+            new() { Name = "Emilie Sanchez", Detail = "Marseille", Category = "Infirmiere" },
+            new() { Name = "Mathieu Fernandez", Detail = "Marseille", Category = "Mecanicien" },
+            new() { Name = "Aurelie Rossi", Detail = "Marseille", Category = "Coiffeuse" },
+            new() { Name = "Sebastien Blanc", Detail = "Marseille", Category = "Electricien" },
+            new() { Name = "Celine Faure", Detail = "Marseille", Category = "Sage-femme" },
+            new() { Name = "Vincent Girard", Detail = "Marseille", Category = "Pharmacien" },
+            new() { Name = "Sandrine Andre", Detail = "Marseille", Category = "Veterinaire" },
+            new() { Name = "Maxime Lefebvre", Detail = "Lyon", Category = "Cuisinier" },
+            new() { Name = "Charlotte Mercier", Detail = "Lyon", Category = "Designer" },
+            new() { Name = "Alexandre Dupuis", Detail = "Lyon", Category = "Chirurgien" },
+            new() { Name = "Pauline Lambert", Detail = "Lyon", Category = "Architecte" },
+            new() { Name = "Benjamin Bonnet", Detail = "Lyon", Category = "Developpeur" },
+            new() { Name = "Marine Francois", Detail = "Lyon", Category = "Traductrice" },
+            new() { Name = "Romain Fontaine", Detail = "Lyon", Category = "Boucher" },
+            new() { Name = "Laetitia Rousseau", Detail = "Lyon", Category = "Fleuriste" },
+            new() { Name = "Guillaume Vincent", Detail = "Lyon", Category = "Notaire" },
+            new() { Name = "Elodie Muller", Detail = "Lyon", Category = "Kinesitherapeute" },
+            new() { Name = "Hugo Fournier", Detail = "Toulouse", Category = "Pilote" },
+            new() { Name = "Manon Giraud", Detail = "Toulouse", Category = "Ergotherapeute" },
+            new() { Name = "Clement Morel", Detail = "Toulouse", Category = "Ingenieur" },
+            new() { Name = "Lea Gauthier", Detail = "Toulouse", Category = "Orthophoniste" },
+            new() { Name = "Thomas Perrin", Detail = "Toulouse", Category = "Menuisier" },
+            new() { Name = "Margaux Robin", Detail = "Toulouse", Category = "Sage-femme" },
+            new() { Name = "Quentin Masson", Detail = "Toulouse", Category = "Informaticien" },
+            new() { Name = "Justine Henry", Detail = "Toulouse", Category = "Biologiste" },
+            new() { Name = "Adrien Chevalier", Detail = "Bordeaux", Category = "Viticulteur" },
+            new() { Name = "Oceane Renard", Detail = "Bordeaux", Category = "Sommeliere" },
+            new() { Name = "Florian Marchand", Detail = "Bordeaux", Category = "Oenologue" },
+            new() { Name = "Amandine Picard", Detail = "Bordeaux", Category = "Enseignante" },
+            new() { Name = "Damien Lemoine", Detail = "Bordeaux", Category = "Geologue" },
+            new() { Name = "Melanie Carpentier", Detail = "Bordeaux", Category = "Libraire" },
+            new() { Name = "Valentin Hubert", Detail = "Nantes", Category = "Osteopathe" },
+            new() { Name = "Clara Dumas", Detail = "Nantes", Category = "Journaliste" },
+            new() { Name = "Alexis Joly", Detail = "Nantes", Category = "Graphiste" },
+            new() { Name = "Lucie Blanchard", Detail = "Nantes", Category = "Dieteticienne" },
+            new() { Name = "Thibault Schneider", Detail = "Strasbourg", Category = "Brasseur" },
+            new() { Name = "Helene Weber", Detail = "Strasbourg", Category = "Traductrice" },
+            new() { Name = "Arnaud Klein", Detail = "Strasbourg", Category = "Patissier" },
+            new() { Name = "Stephanie Fischer", Detail = "Strasbourg", Category = "Pharmacienne" },
+            new() { Name = "Cedric Lemaire", Detail = "Lille", Category = "Brasseur" },
+            new() { Name = "Audrey Lecomte", Detail = "Lille", Category = "Styliste" },
+            new() { Name = "Mickael Deschamps", Detail = "Lille", Category = "Chocolatier" },
+            new() { Name = "Virginie Collet", Detail = "Lille", Category = "Urbaniste" },
+            new() { Name = "Fabien Olivier", Detail = "Nice", Category = "Moniteur" },
+            new() { Name = "Delphine Philippe", Detail = "Nice", Category = "Galeriste" },
+            new() { Name = "Yannick Perrot", Detail = "Nice", Category = "Plongeur" },
+            new() { Name = "Caroline Renaud", Detail = "Nice", Category = "Decoratrice" },
+            new() { Name = "Ludovic Caron", Detail = "Montpellier", Category = "Chercheur" },
+            new() { Name = "Anais Maillard", Detail = "Montpellier", Category = "Archeologue" },
+            new() { Name = "Kevin Guerin", Detail = "Montpellier", Category = "Sommelier" },
+            new() { Name = "Elise Roger", Detail = "Montpellier", Category = "Podologue" },
+            new() { Name = "Olivier Barbier", Detail = "Rennes", Category = "Informaticien" },
+            new() { Name = "Marion Arnaud", Detail = "Rennes", Category = "Sociologue" },
+            new() { Name = "Sylvain Leclerc", Detail = "Rennes", Category = "Charpentier" },
+            new() { Name = "Gaelle Gaillard", Detail = "Rennes", Category = "Orthoptiste" },
+            new() { Name = "Pascal Perrier", Detail = "Dijon", Category = "Moutardier" },
+            new() { Name = "Agnes Brunet", Detail = "Dijon", Category = "Herboriste" },
+            new() { Name = "Franck Noel", Detail = "Dijon", Category = "Fromager" },
+            new() { Name = "Monique Legrand", Detail = "Dijon", Category = "Couturiere" },
+            new() { Name = "Damien Rey", Detail = "Grenoble", Category = "Alpiniste" },
+            new() { Name = "Chloe Mathieu", Detail = "Grenoble", Category = "Physicienne" },
+            new() { Name = "Raphael Colin", Detail = "Grenoble", Category = "Ingenieur" },
+            new() { Name = "Fanny Vidal", Detail = "Grenoble", Category = "Opticienne" },
+            new() { Name = "Gregory Lemoine", Detail = "Toulon", Category = "Officier" },
+            new() { Name = "Estelle Dupre", Detail = "Toulon", Category = "Navigatrice" },
+            new() { Name = "Benoit Charles", Detail = "Toulon", Category = "Chaudronnier" },
+            new() { Name = "Patricia Bourgeois", Detail = "Toulon", Category = "Comptable" },
+        };
 
-                // Marseille
-                new() { FirstName = "Antoine", LastName = "Garcia", City = "Marseille", Profession = "Pecheur" },
-                new() { FirstName = "Camille", LastName = "Martinez", City = "Marseille", Profession = "Restaurateur" },
-                new() { FirstName = "Julien", LastName = "Lopez", City = "Marseille", Profession = "Marin" },
-                new() { FirstName = "Emilie", LastName = "Sanchez", City = "Marseille", Profession = "Infirmiere" },
-                new() { FirstName = "Mathieu", LastName = "Fernandez", City = "Marseille", Profession = "Mecanicien" },
-                new() { FirstName = "Aurelie", LastName = "Rossi", City = "Marseille", Profession = "Coiffeuse" },
-                new() { FirstName = "Sebastien", LastName = "Blanc", City = "Marseille", Profession = "Electricien" },
-                new() { FirstName = "Celine", LastName = "Faure", City = "Marseille", Profession = "Sage-femme" },
-                new() { FirstName = "Vincent", LastName = "Girard", City = "Marseille", Profession = "Pharmacien" },
-                new() { FirstName = "Sandrine", LastName = "Andre", City = "Marseille", Profession = "Veterinaire" },
+        private static readonly List<DemoItem> elementsData = new()
+        {
+            new() { Name = "Hydrogene", Detail = "H", Category = "Non-metal" },
+            new() { Name = "Helium", Detail = "He", Category = "Gaz noble" },
+            new() { Name = "Lithium", Detail = "Li", Category = "Metal alcalin" },
+            new() { Name = "Beryllium", Detail = "Be", Category = "Metal alcalino-terreux" },
+            new() { Name = "Bore", Detail = "B", Category = "Metalloide" },
+            new() { Name = "Carbone", Detail = "C", Category = "Non-metal" },
+            new() { Name = "Azote", Detail = "N", Category = "Non-metal" },
+            new() { Name = "Oxygene", Detail = "O", Category = "Non-metal" },
+            new() { Name = "Fluor", Detail = "F", Category = "Halogene" },
+            new() { Name = "Neon", Detail = "Ne", Category = "Gaz noble" },
+            new() { Name = "Sodium", Detail = "Na", Category = "Metal alcalin" },
+            new() { Name = "Magnesium", Detail = "Mg", Category = "Metal alcalino-terreux" },
+            new() { Name = "Aluminium", Detail = "Al", Category = "Metal pauvre" },
+            new() { Name = "Silicium", Detail = "Si", Category = "Metalloide" },
+            new() { Name = "Phosphore", Detail = "P", Category = "Non-metal" },
+            new() { Name = "Soufre", Detail = "S", Category = "Non-metal" },
+            new() { Name = "Chlore", Detail = "Cl", Category = "Halogene" },
+            new() { Name = "Argon", Detail = "Ar", Category = "Gaz noble" },
+            new() { Name = "Potassium", Detail = "K", Category = "Metal alcalin" },
+            new() { Name = "Calcium", Detail = "Ca", Category = "Metal alcalino-terreux" },
+            new() { Name = "Titane", Detail = "Ti", Category = "Metal de transition" },
+            new() { Name = "Chrome", Detail = "Cr", Category = "Metal de transition" },
+            new() { Name = "Manganese", Detail = "Mn", Category = "Metal de transition" },
+            new() { Name = "Fer", Detail = "Fe", Category = "Metal de transition" },
+            new() { Name = "Cobalt", Detail = "Co", Category = "Metal de transition" },
+            new() { Name = "Nickel", Detail = "Ni", Category = "Metal de transition" },
+            new() { Name = "Cuivre", Detail = "Cu", Category = "Metal de transition" },
+            new() { Name = "Zinc", Detail = "Zn", Category = "Metal de transition" },
+            new() { Name = "Arsenic", Detail = "As", Category = "Metalloide" },
+            new() { Name = "Brome", Detail = "Br", Category = "Halogene" },
+            new() { Name = "Krypton", Detail = "Kr", Category = "Gaz noble" },
+            new() { Name = "Argent", Detail = "Ag", Category = "Metal de transition" },
+            new() { Name = "Etain", Detail = "Sn", Category = "Metal pauvre" },
+            new() { Name = "Iode", Detail = "I", Category = "Halogene" },
+            new() { Name = "Xenon", Detail = "Xe", Category = "Gaz noble" },
+            new() { Name = "Platine", Detail = "Pt", Category = "Metal de transition" },
+            new() { Name = "Or", Detail = "Au", Category = "Metal de transition" },
+            new() { Name = "Mercure", Detail = "Hg", Category = "Metal de transition" },
+            new() { Name = "Plomb", Detail = "Pb", Category = "Metal pauvre" },
+            new() { Name = "Uranium", Detail = "U", Category = "Actinide" },
+        };
 
-                // Lyon
-                new() { FirstName = "Maxime", LastName = "Lefebvre", City = "Lyon", Profession = "Cuisinier" },
-                new() { FirstName = "Charlotte", LastName = "Mercier", City = "Lyon", Profession = "Designer" },
-                new() { FirstName = "Alexandre", LastName = "Dupuis", City = "Lyon", Profession = "Chirurgien" },
-                new() { FirstName = "Pauline", LastName = "Lambert", City = "Lyon", Profession = "Architecte" },
-                new() { FirstName = "Benjamin", LastName = "Bonnet", City = "Lyon", Profession = "Developpeur" },
-                new() { FirstName = "Marine", LastName = "Francois", City = "Lyon", Profession = "Traductrice" },
-                new() { FirstName = "Romain", LastName = "Fontaine", City = "Lyon", Profession = "Boucher" },
-                new() { FirstName = "Laetitia", LastName = "Rousseau", City = "Lyon", Profession = "Fleuriste" },
-                new() { FirstName = "Guillaume", LastName = "Vincent", City = "Lyon", Profession = "Notaire" },
-                new() { FirstName = "Elodie", LastName = "Muller", City = "Lyon", Profession = "Kinesitherapeute" },
+        private static readonly List<DemoItem> vaccinesData = new()
+        {
+            new() { Name = "Paracetamol", Detail = "Analgesique", Category = "Douleur" },
+            new() { Name = "Ibuprofene", Detail = "Anti-inflammatoire", Category = "Douleur" },
+            new() { Name = "Aspirine", Detail = "Analgesique", Category = "Douleur" },
+            new() { Name = "Doliprane", Detail = "Paracetamol", Category = "Douleur" },
+            new() { Name = "Amoxicilline", Detail = "Antibiotique", Category = "Infection" },
+            new() { Name = "Penicilline", Detail = "Antibiotique", Category = "Infection" },
+            new() { Name = "Azithromycine", Detail = "Antibiotique", Category = "Infection" },
+            new() { Name = "Metformine", Detail = "Antidiabetique", Category = "Diabete" },
+            new() { Name = "Insuline", Detail = "Hormone", Category = "Diabete" },
+            new() { Name = "Omeprazole", Detail = "Inhibiteur pompe protons", Category = "Estomac" },
+            new() { Name = "Levothyroxine", Detail = "Hormone thyroidienne", Category = "Thyroide" },
+            new() { Name = "Atorvastatine", Detail = "Statine", Category = "Cholesterol" },
+            new() { Name = "Simvastatine", Detail = "Statine", Category = "Cholesterol" },
+            new() { Name = "Amlodipine", Detail = "Antihypertenseur", Category = "Tension" },
+            new() { Name = "Lisinopril", Detail = "Inhibiteur ECA", Category = "Tension" },
+            new() { Name = "Lorazepam", Detail = "Benzodiazepine", Category = "Anxiete" },
+            new() { Name = "Diazepam", Detail = "Benzodiazepine", Category = "Anxiete" },
+            new() { Name = "Sertraline", Detail = "Antidepresseur", Category = "Depression" },
+            new() { Name = "Fluoxetine", Detail = "Antidepresseur", Category = "Depression" },
+            new() { Name = "Vaccin BCG", Detail = "Bacille Calmette-Guerin", Category = "Vaccin" },
+            new() { Name = "Vaccin ROR", Detail = "Rougeole Oreillons Rubeole", Category = "Vaccin" },
+            new() { Name = "Vaccin DTP", Detail = "Diphterie Tetanos Polio", Category = "Vaccin" },
+            new() { Name = "Vaccin Grippe", Detail = "Influenza saisonnier", Category = "Vaccin" },
+            new() { Name = "Vaccin Hepatite B", Detail = "Virus Hepatite B", Category = "Vaccin" },
+            new() { Name = "Vaccin Covid", Detail = "SARS-CoV-2", Category = "Vaccin" },
+            new() { Name = "Vaccin Papillomavirus", Detail = "HPV", Category = "Vaccin" },
+            new() { Name = "Vaccin Pneumocoque", Detail = "Streptococcus pneumoniae", Category = "Vaccin" },
+            new() { Name = "Cortisone", Detail = "Corticosteroide", Category = "Inflammation" },
+            new() { Name = "Prednisolone", Detail = "Corticosteroide", Category = "Inflammation" },
+            new() { Name = "Morphine", Detail = "Opoide", Category = "Douleur severe" },
+            new() { Name = "Codeine", Detail = "Opoide", Category = "Douleur severe" },
+            new() { Name = "Ventoline", Detail = "Bronchodilatateur", Category = "Asthme" },
+            new() { Name = "Salbutamol", Detail = "Bronchodilatateur", Category = "Asthme" },
+        };
 
-                // Toulouse
-                new() { FirstName = "Hugo", LastName = "Fournier", City = "Toulouse", Profession = "Pilote" },
-                new() { FirstName = "Manon", LastName = "Giraud", City = "Toulouse", Profession = "Ergotherapeute" },
-                new() { FirstName = "Clement", LastName = "Morel", City = "Toulouse", Profession = "Ingenieur" },
-                new() { FirstName = "Lea", LastName = "Gauthier", City = "Toulouse", Profession = "Orthophoniste" },
-                new() { FirstName = "Thomas", LastName = "Perrin", City = "Toulouse", Profession = "Menuisier" },
-                new() { FirstName = "Margaux", LastName = "Robin", City = "Toulouse", Profession = "Sage-femme" },
-                new() { FirstName = "Quentin", LastName = "Masson", City = "Toulouse", Profession = "Informaticien" },
-                new() { FirstName = "Justine", LastName = "Henry", City = "Toulouse", Profession = "Biologiste" },
-
-                // Bordeaux
-                new() { FirstName = "Adrien", LastName = "Chevalier", City = "Bordeaux", Profession = "Viticulteur" },
-                new() { FirstName = "Oceane", LastName = "Renard", City = "Bordeaux", Profession = "Sommeliere" },
-                new() { FirstName = "Florian", LastName = "Marchand", City = "Bordeaux", Profession = "Oenologue" },
-                new() { FirstName = "Amandine", LastName = "Picard", City = "Bordeaux", Profession = "Enseignante" },
-                new() { FirstName = "Damien", LastName = "Lemoine", City = "Bordeaux", Profession = "Geologue" },
-                new() { FirstName = "Melanie", LastName = "Carpentier", City = "Bordeaux", Profession = "Libraire" },
-
-                // Nantes
-                new() { FirstName = "Valentin", LastName = "Hubert", City = "Nantes", Profession = "Osteopathe" },
-                new() { FirstName = "Clara", LastName = "Dumas", City = "Nantes", Profession = "Journaliste" },
-                new() { FirstName = "Alexis", LastName = "Joly", City = "Nantes", Profession = "Graphiste" },
-                new() { FirstName = "Lucie", LastName = "Blanchard", City = "Nantes", Profession = "Dieteticienne" },
-
-                // Strasbourg
-                new() { FirstName = "Thibault", LastName = "Schneider", City = "Strasbourg", Profession = "Brasseur" },
-                new() { FirstName = "Helene", LastName = "Weber", City = "Strasbourg", Profession = "Traductrice" },
-                new() { FirstName = "Arnaud", LastName = "Klein", City = "Strasbourg", Profession = "Patissier" },
-                new() { FirstName = "Stephanie", LastName = "Fischer", City = "Strasbourg", Profession = "Pharmacienne" },
-
-                // Lille
-                new() { FirstName = "Cedric", LastName = "Lemaire", City = "Lille", Profession = "Brasseur" },
-                new() { FirstName = "Audrey", LastName = "Lecomte", City = "Lille", Profession = "Styliste" },
-                new() { FirstName = "Mickael", LastName = "Deschamps", City = "Lille", Profession = "Chocolatier" },
-                new() { FirstName = "Virginie", LastName = "Collet", City = "Lille", Profession = "Urbaniste" },
-
-                // Nice
-                new() { FirstName = "Fabien", LastName = "Olivier", City = "Nice", Profession = "Moniteur" },
-                new() { FirstName = "Delphine", LastName = "Philippe", City = "Nice", Profession = "Galeriste" },
-                new() { FirstName = "Yannick", LastName = "Perrot", City = "Nice", Profession = "Plongeur" },
-                new() { FirstName = "Caroline", LastName = "Renaud", City = "Nice", Profession = "Decoratrice" },
-
-                // Montpellier
-                new() { FirstName = "Ludovic", LastName = "Caron", City = "Montpellier", Profession = "Chercheur" },
-                new() { FirstName = "Anais", LastName = "Maillard", City = "Montpellier", Profession = "Archeologue" },
-                new() { FirstName = "Kevin", LastName = "Guerin", City = "Montpellier", Profession = "Sommelier" },
-                new() { FirstName = "Elise", LastName = "Roger", City = "Montpellier", Profession = "Podologue" },
-
-                // Rennes
-                new() { FirstName = "Olivier", LastName = "Barbier", City = "Rennes", Profession = "Informaticien" },
-                new() { FirstName = "Marion", LastName = "Arnaud", City = "Rennes", Profession = "Sociologue" },
-                new() { FirstName = "Sylvain", LastName = "Leclerc", City = "Rennes", Profession = "Charpentier" },
-                new() { FirstName = "Gaelle", LastName = "Gaillard", City = "Rennes", Profession = "Orthoptiste" },
-
-                // Dijon
-                new() { FirstName = "Pascal", LastName = "Perrier", City = "Dijon", Profession = "Moutardier" },
-                new() { FirstName = "Agnes", LastName = "Brunet", City = "Dijon", Profession = "Herboriste" },
-                new() { FirstName = "Franck", LastName = "Noel", City = "Dijon", Profession = "Fromager" },
-                new() { FirstName = "Monique", LastName = "Legrand", City = "Dijon", Profession = "Couturiere" },
-
-                // Grenoble
-                new() { FirstName = "Damien", LastName = "Rey", City = "Grenoble", Profession = "Alpiniste" },
-                new() { FirstName = "Chloe", LastName = "Mathieu", City = "Grenoble", Profession = "Physicienne" },
-                new() { FirstName = "Raphael", LastName = "Colin", City = "Grenoble", Profession = "Ingenieur" },
-                new() { FirstName = "Fanny", LastName = "Vidal", City = "Grenoble", Profession = "Opticienne" },
-
-                // Toulon
-                new() { FirstName = "Gregory", LastName = "Lemoine", City = "Toulon", Profession = "Officier" },
-                new() { FirstName = "Estelle", LastName = "Dupre", City = "Toulon", Profession = "Navigatrice" },
-                new() { FirstName = "Benoit", LastName = "Charles", City = "Toulon", Profession = "Chaudronnier" },
-                new() { FirstName = "Patricia", LastName = "Bourgeois", City = "Toulon", Profession = "Comptable" },
-            };
-        }
+        private static readonly List<DemoItem> citiesData = new()
+        {
+            new() { Name = "Paris", Detail = "Ile-de-France", Category = "2 100 000 hab." },
+            new() { Name = "Marseille", Detail = "Provence-Alpes-Cote d'Azur", Category = "870 000 hab." },
+            new() { Name = "Lyon", Detail = "Auvergne-Rhone-Alpes", Category = "520 000 hab." },
+            new() { Name = "Toulouse", Detail = "Occitanie", Category = "490 000 hab." },
+            new() { Name = "Nice", Detail = "Provence-Alpes-Cote d'Azur", Category = "340 000 hab." },
+            new() { Name = "Nantes", Detail = "Pays de la Loire", Category = "320 000 hab." },
+            new() { Name = "Montpellier", Detail = "Occitanie", Category = "300 000 hab." },
+            new() { Name = "Strasbourg", Detail = "Grand Est", Category = "290 000 hab." },
+            new() { Name = "Bordeaux", Detail = "Nouvelle-Aquitaine", Category = "260 000 hab." },
+            new() { Name = "Lille", Detail = "Hauts-de-France", Category = "235 000 hab." },
+            new() { Name = "Rennes", Detail = "Bretagne", Category = "220 000 hab." },
+            new() { Name = "Reims", Detail = "Grand Est", Category = "185 000 hab." },
+            new() { Name = "Saint-Etienne", Detail = "Auvergne-Rhone-Alpes", Category = "175 000 hab." },
+            new() { Name = "Toulon", Detail = "Provence-Alpes-Cote d'Azur", Category = "175 000 hab." },
+            new() { Name = "Le Havre", Detail = "Normandie", Category = "170 000 hab." },
+            new() { Name = "Grenoble", Detail = "Auvergne-Rhone-Alpes", Category = "160 000 hab." },
+            new() { Name = "Dijon", Detail = "Bourgogne-Franche-Comte", Category = "160 000 hab." },
+            new() { Name = "Angers", Detail = "Pays de la Loire", Category = "155 000 hab." },
+            new() { Name = "Nimes", Detail = "Occitanie", Category = "150 000 hab." },
+            new() { Name = "Clermont-Ferrand", Detail = "Auvergne-Rhone-Alpes", Category = "147 000 hab." },
+            new() { Name = "Le Mans", Detail = "Pays de la Loire", Category = "145 000 hab." },
+            new() { Name = "Aix-en-Provence", Detail = "Provence-Alpes-Cote d'Azur", Category = "145 000 hab." },
+            new() { Name = "Brest", Detail = "Bretagne", Category = "140 000 hab." },
+            new() { Name = "Tours", Detail = "Centre-Val de Loire", Category = "138 000 hab." },
+            new() { Name = "Amiens", Detail = "Hauts-de-France", Category = "135 000 hab." },
+            new() { Name = "Limoges", Detail = "Nouvelle-Aquitaine", Category = "132 000 hab." },
+            new() { Name = "Perpignan", Detail = "Occitanie", Category = "120 000 hab." },
+            new() { Name = "Besancon", Detail = "Bourgogne-Franche-Comte", Category = "118 000 hab." },
+            new() { Name = "Orleans", Detail = "Centre-Val de Loire", Category = "116 000 hab." },
+            new() { Name = "Metz", Detail = "Grand Est", Category = "115 000 hab." },
+            new() { Name = "Rouen", Detail = "Normandie", Category = "113 000 hab." },
+            new() { Name = "Mulhouse", Detail = "Grand Est", Category = "110 000 hab." },
+            new() { Name = "Caen", Detail = "Normandie", Category = "107 000 hab." },
+            new() { Name = "Nancy", Detail = "Grand Est", Category = "105 000 hab." },
+            new() { Name = "Avignon", Detail = "Provence-Alpes-Cote d'Azur", Category = "92 000 hab." },
+            new() { Name = "Poitiers", Detail = "Nouvelle-Aquitaine", Category = "90 000 hab." },
+            new() { Name = "La Rochelle", Detail = "Nouvelle-Aquitaine", Category = "80 000 hab." },
+            new() { Name = "Pau", Detail = "Nouvelle-Aquitaine", Category = "78 000 hab." },
+            new() { Name = "Calais", Detail = "Hauts-de-France", Category = "73 000 hab." },
+            new() { Name = "Ajaccio", Detail = "Corse", Category = "72 000 hab." },
+        };
     }
 
-    public class Person
+    public class DemoItem
     {
-        public string FirstName { get; set; } = "";
-        public string LastName { get; set; } = "";
-        public string City { get; set; } = "";
-        public string Profession { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Detail { get; set; } = "";
+        public string Category { get; set; } = "";
     }
 }

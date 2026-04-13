@@ -1,15 +1,27 @@
 @page "/"
 
 <div class="page">
+    <div class="lang-toggle">
+        <span class="@(lang == "fr" ? "lang-active" : "lang-btn")" @onclick='() => SetLang("fr")'>FR</span>
+        <span class="@(lang == "en" ? "lang-active" : "lang-btn")" @onclick='() => SetLang("en")'>EN</span>
+    </div>
+
     <div class="header">
-        <h1>French Search Engine</h1>
-        <p>Multi-algorithm search with French Soundex phonetic matching</p>
+        <h1>@L("title")</h1>
+        <p>@L("subtitle")</p>
+    </div>
+
+    <div class="dataset-tabs">
+        @foreach (var tab in datasetTabs)
+        {
+            <span class="@(activeTab == tab.Key ? "tab-active" : "tab")" @onclick="() => SetTab(tab.Key)">@tab.Value[lang]</span>
+        }
     </div>
 
     <div class="search-box">
         <span class="search-icon">&#128269;</span>
         <input type="text"
-               placeholder="Try typing: farmaci, dupon, marseil, filosof..."
+               placeholder="@GetPlaceholder()"
                value="@searchQuery"
                @oninput="OnSearch" />
     </div>
@@ -17,7 +29,7 @@
     @if (results != null && results.Count > 0)
     {
         <div class="stats">
-            <span>@results.Count result@(results.Count > 1 ? "s" : "") found</span>
+            <span>@results.Count @L("results")</span>
             <span>@elapsedMs ms</span>
         </div>
 
@@ -48,21 +60,21 @@
     {
         <div class="empty-state">
             <div class="icon">&#128528;</div>
-            <p>No results for "<strong>@searchQuery</strong>"</p>
+            <p>@L("no_results") "<strong>@searchQuery</strong>"</p>
         </div>
     }
     else
     {
         <div class="empty-state">
             <div class="icon">&#9650;</div>
-            <p>Type a name, city, or profession to search across 200+ entries</p>
+            <p>@GetEmptyText()</p>
         </div>
     }
 
     <div class="examples">
-        <h3>Try these examples</h3>
+        <h3>@L("try_examples")</h3>
         <div class="example-chips">
-            @foreach (var example in exampleQueries)
+            @foreach (var example in GetExamples())
             {
                 <span class="chip" @onclick="() => SetQuery(example)">@example</span>
             }
@@ -70,6 +82,6 @@
     </div>
 
     <div class="footer">
-        <p>Powered by <a href="https://github.com/esuzen/french-search-engine" target="_blank">SearchModule.French</a> running entirely in your browser via WebAssembly</p>
+        <p>@L("powered_by") <a href="https://github.com/esuzen/french-search-engine" target="_blank">SearchModule.French</a> @L("powered_wasm")</p>
     </div>
 </div>

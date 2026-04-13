@@ -274,9 +274,79 @@ body {
     text-decoration: underline;
 }
 
+/* Language toggle */
+.lang-toggle {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.lang-btn, .lang-active {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.lang-btn {
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+}
+
+.lang-btn:hover {
+    background: var(--surface-hover);
+}
+
+.lang-active {
+    background: var(--accent);
+    color: white;
+    border: 1px solid var(--accent);
+}
+
+/* Dataset tabs */
+.dataset-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.tab, .tab-active {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.tab {
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+}
+
+.tab:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.tab-active {
+    background: var(--accent-glow);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .header h1 { font-size: 1.6rem; }
     .result-card { grid-template-columns: 1fr; gap: 8px; }
     .similarity { justify-content: flex-start; }
+    .dataset-tabs { gap: 4px; }
+    .tab, .tab-active { padding: 6px 10px; font-size: 0.8rem; }
 }
