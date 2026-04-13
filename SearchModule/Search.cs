@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 
@@ -69,15 +70,18 @@ namespace SearchModule
 
             var dataTrie = new Trie();
             var resultsList = new List<SearchResult<T>>();
-            var associationList = new Dictionary<T, List<string>>();
 
+            // Reverse lookup: word -> object (O(1) instead of scanning)
+            var wordToObject = new Dictionary<string, T>();
+            // Forward lookup: object -> words (for trie removal)
+            var objectToWords = new Dictionary<T, List<string>>();
             // Pre-computed Soundex cache: word -> soundex value
             var soundexCache = new Dictionary<string, double>();
 
-            // Normalize input
+            // Normalize search input
             searchString = searchString.ToLower();
             searchString = RemoveAccentedLetters(searchString);
-            double searchStringSoundex = Soundex.GetSoundex(searchString);
+            double searchSoundex = Soundex.GetSoundex(searchString);
 
             // Pre-compute k/ch alternative for search string
             double? altSearchSoundex = null;
@@ -86,41 +90,65 @@ namespace SearchModule
             else if (searchString.Contains("ch"))
                 altSearchSoundex = Soundex.GetSoundex(searchString.Replace("ch", "k"));
 
-            // Build trie, association dictionary, and soundex cache from object properties
+            // Cache PropertyInfo per filter (avoid repeated reflection)
+            var type = typeof(T);
+            var propertyCache = new Dictionary<string, PropertyInfo>(filters.Length);
+            foreach (var col in filters)
+            {
+                var prop = type.GetProperty(col);
+                if (prop != null)
+                    propertyCache[col] = prop;
+            }
+
+            // Build trie, lookups, and soundex cache
             foreach (T value in listOfValues)
             {
-                var tmp = new List<string>();
+                var words = new List<string>();
 
-                foreach (string col in filters)
+                foreach (var kvp in propertyCache)
                 {
-                    try
-                    {
-                        string columnValue = value.GetType().GetProperty(col).GetValue(value, null).ToString().ToLower().Trim();
-                        columnValue = GetStringWithoutSpecialChar(columnValue);
-                        dataTrie.AddWord(columnValue);
-                        tmp.Add(columnValue);
+                    var rawValue = kvp.Value.GetValue(value, null);
+                    if (rawValue == null) continue;
 
-                        // Pre-compute Soundex at init time (only once per unique word)
-                        if (!soundexCache.ContainsKey(columnValue))
-                        {
-                            soundexCache[columnValue] = Soundex.GetSoundex(columnValue);
+                    string columnValue = rawValue.ToString().ToLower().Trim();
+                    columnValue = GetStringWithoutSpecialChar(columnValue);
+                    if (string.IsNullOrWhiteSpace(columnValue)) continue;
 
-                            // Also cache ch/k alternative if applicable
-                            if (columnValue.Contains("ch"))
-                            {
-                                string altKey = columnValue + ":ch>k";
-                                soundexCache[altKey] = Soundex.GetSoundex(columnValue.Replace("ch", "k"));
-                            }
-                        }
-                    }
-                    catch (Exception ex) when (ex is NullReferenceException || ex is ArgumentNullException)
+                    dataTrie.AddWord(columnValue);
+                    words.Add(columnValue);
+
+                    // Reverse lookup (first object wins if duplicate values)
+                    if (!wordToObject.ContainsKey(columnValue))
+                        wordToObject[columnValue] = value;
+
+                    // Pre-compute Soundex (once per unique word)
+                    if (!soundexCache.ContainsKey(columnValue))
                     {
-                        // Property not found or null value for this filter — skip silently
+                        soundexCache[columnValue] = Soundex.GetSoundex(columnValue);
+
+                        if (columnValue.Contains("ch"))
+                            soundexCache[columnValue + ":alt"] = Soundex.GetSoundex(columnValue.Replace("ch", "k"));
                     }
                 }
 
-                if (tmp.Count > 0)
-                    associationList.Add(value, tmp);
+                if (words.Count > 0)
+                    objectToWords[value] = words;
+            }
+
+            // Track already-matched objects to avoid duplicates
+            var matchedObjects = new HashSet<T>();
+
+            // Helper: add result if object not already matched
+            bool TryAddResult(T obj, int category, double similarity)
+            {
+                if (obj == null || !matchedObjects.Add(obj)) return false;
+                resultsList.Add(new SearchResult<T>()
+                {
+                    objectValue = obj,
+                    resultCategory = category,
+                    percentageSimilarity = similarity
+                });
+                return true;
             }
 
             // --- Search cascade ---
@@ -128,14 +156,9 @@ namespace SearchModule
             // 1. Exact match
             if (dataTrie.HasWord(searchString))
             {
-                T associatedObject = GetAssociatedObjectByValue(searchString, associationList);
-                resultsList.Add(new SearchResult<T>()
-                {
-                    objectValue = associatedObject,
-                    percentageSimilarity = 100,
-                    resultCategory = (int)ResultCategories.Matching
-                });
-                dataTrie = RemoveObjectFromTrie(dataTrie, associatedObject, associationList);
+                T obj;
+                if (wordToObject.TryGetValue(searchString, out obj))
+                    TryAddResult(obj, (int)ResultCategories.Matching, 100);
             }
 
             // 2. Prefix match
@@ -143,92 +166,75 @@ namespace SearchModule
             {
                 foreach (string word in dataTrie.GetWords(searchString))
                 {
-                    T associatedObject = GetAssociatedObjectByValue(word, associationList);
-                    resultsList.Add(new SearchResult<T>()
-                    {
-                        objectValue = associatedObject,
-                        resultCategory = (int)ResultCategories.Prefix,
-                        percentageSimilarity = CompareTwoWords(searchString, word)
-                    });
-                    dataTrie = RemoveObjectFromTrie(dataTrie, associatedObject, associationList);
+                    if (matchedObjects.Count >= maxResultCount) break;
+                    T obj;
+                    if (wordToObject.TryGetValue(word, out obj))
+                        TryAddResult(obj, (int)ResultCategories.Prefix, CompareTwoWords(searchString, word));
                 }
             }
 
-            // 3. Substring match
-            if (resultsList.Count < maxResultCount)
+            // 3. Substring match — get all words once, filter in-place
+            if (matchedObjects.Count < maxResultCount)
             {
-                foreach (string word in dataTrie.GetWords().Where(a => a.Contains(searchString)))
+                var allWords = dataTrie.GetWords();
+                foreach (string word in allWords)
                 {
-                    T associatedObject = GetAssociatedObjectByValue(word, associationList);
-                    resultsList.Add(new SearchResult<T>()
-                    {
-                        objectValue = associatedObject,
-                        resultCategory = (int)ResultCategories.Substring,
-                        percentageSimilarity = CompareTwoWords(searchString, word)
-                    });
-                    dataTrie = RemoveObjectFromTrie(dataTrie, associatedObject, associationList);
+                    if (matchedObjects.Count >= maxResultCount) break;
+                    if (!word.Contains(searchString)) continue;
+
+                    T obj;
+                    if (wordToObject.TryGetValue(word, out obj) && !matchedObjects.Contains(obj))
+                        TryAddResult(obj, (int)ResultCategories.Substring, CompareTwoWords(searchString, word));
                 }
-            }
 
-            // 4. Similarity (Levenshtein) + 5. Phonetic (Soundex) — always both tried
-            if (resultsList.Count < maxResultCount)
-            {
-                foreach (var word in dataTrie.GetWords())
+                // 4. Phonetic + 5. Similarity — reuse same word list
+                // Phonetic first (cached double comparison = O(1)) then Levenshtein (O(n*m))
+                int searchLen = searchString.Length;
+
+                if (matchedObjects.Count < maxResultCount)
                 {
-                    bool matched = false;
-
-                    // 4a. Similarity: close Levenshtein distance + high character overlap
-                    int levenshteinDistance = LevenshteinDistance.Compute(searchString, word);
-                    if (levenshteinDistance < options.MaxLevenshteinDistance)
+                    foreach (var word in allWords)
                     {
-                        double stringSimilarity = CompareTwoWords(searchString, word);
-                        if (stringSimilarity > similarityTolerance)
-                        {
-                            T associatedObject = GetAssociatedObjectByValue(word, associationList);
-                            resultsList.Add(new SearchResult<T>()
-                            {
-                                resultCategory = (int)ResultCategories.Similar,
-                                objectValue = associatedObject,
-                                percentageSimilarity = stringSimilarity
-                            });
-                            matched = true;
-                        }
-                    }
+                        if (matchedObjects.Count >= maxResultCount) break;
 
-                    // 4b. Phonetic: Soundex comparison (always tried if similarity didn't match)
-                    // Uses pre-computed cache — no Soundex recalculation at search time
-                    if (!matched)
-                    {
+                        T obj;
+                        if (!wordToObject.TryGetValue(word, out obj) || matchedObjects.Contains(obj))
+                            continue;
+
+                        // 4a. Phonetic: cached Soundex comparison (very fast — just double comparisons)
                         double wordSoundex;
-                        soundexCache.TryGetValue(word, out wordSoundex);
-
-                        bool phoneticMatch = Math.Abs(searchStringSoundex - wordSoundex) <= soundexTolerance;
-
-                        // Try ch/k alternative on the data word
-                        if (!phoneticMatch)
+                        if (soundexCache.TryGetValue(word, out wordSoundex))
                         {
-                            double altWordSoundex;
-                            if (soundexCache.TryGetValue(word + ":ch>k", out altWordSoundex))
+                            bool phoneticMatch = Math.Abs(searchSoundex - wordSoundex) <= soundexTolerance;
+
+                            if (!phoneticMatch)
                             {
-                                phoneticMatch = Math.Abs(searchStringSoundex - altWordSoundex) <= soundexTolerance;
+                                double altWordSoundex;
+                                if (soundexCache.TryGetValue(word + ":alt", out altWordSoundex))
+                                    phoneticMatch = Math.Abs(searchSoundex - altWordSoundex) <= soundexTolerance;
+                            }
+
+                            if (!phoneticMatch && altSearchSoundex.HasValue)
+                                phoneticMatch = Math.Abs(altSearchSoundex.Value - wordSoundex) <= soundexTolerance;
+
+                            if (phoneticMatch)
+                            {
+                                TryAddResult(obj, (int)ResultCategories.Paronym, CompareTwoWords(searchString, word));
+                                continue;
                             }
                         }
 
-                        // Try ch/k alternative on the search query
-                        if (!phoneticMatch && altSearchSoundex.HasValue)
-                        {
-                            phoneticMatch = Math.Abs(altSearchSoundex.Value - wordSoundex) <= soundexTolerance;
-                        }
+                        // 4b. Similarity: skip if length difference too large (can't match)
+                        int wordLen = word.Length;
+                        int lenDiff = Math.Abs(searchLen - wordLen);
+                        if (lenDiff >= options.MaxLevenshteinDistance) continue;
 
-                        if (phoneticMatch)
+                        int dist = LevenshteinDistance.Compute(searchString, word);
+                        if (dist < options.MaxLevenshteinDistance)
                         {
-                            T associatedObject = GetAssociatedObjectByValue(word, associationList);
-                            resultsList.Add(new SearchResult<T>()
-                            {
-                                objectValue = associatedObject,
-                                resultCategory = (int)ResultCategories.Paronym,
-                                percentageSimilarity = CompareTwoWords(searchString, word)
-                            });
+                            double sim = CompareTwoWords(searchString, word);
+                            if (sim > similarityTolerance)
+                                TryAddResult(obj, (int)ResultCategories.Similar, sim);
                         }
                     }
                 }
@@ -238,33 +244,20 @@ namespace SearchModule
             {
                 executionTimer.Stop();
                 Debug.WriteLine("========== End of search ==========");
-                int numberOfResults = resultsList.Count();
-                long totalExecutionTime = executionTimer.ElapsedMilliseconds;
-                Debug.WriteLine(" > Number of results: {0}", numberOfResults);
-                Debug.WriteLine(" > Search time: {0} ms", totalExecutionTime);
+                Debug.WriteLine(" > Number of results: {0}", resultsList.Count);
+                Debug.WriteLine(" > Search time: {0} ms", executionTimer.ElapsedMilliseconds);
             }
 
-            resultsList = resultsList.OrderBy(result => result.resultCategory).ThenByDescending(result => result.percentageSimilarity).ToList();
-            return resultsList.Take(maxResultCount).ToList();
-        }
-
-        private static Trie RemoveObjectFromTrie<T>(Trie valueTrie, T objectToRemove, Dictionary<T, List<string>> associationList)
-        {
-            List<string> list2Del = associationList.Where(l => l.Key.Equals(objectToRemove)).Select(l => l.Value).FirstOrDefault();
-            if (list2Del != null)
+            resultsList.Sort((a, b) =>
             {
-                foreach (var e in list2Del)
-                {
-                    if (valueTrie.HasWord(e))
-                        valueTrie.RemoveWord(e);
-                }
-            }
-            return valueTrie;
-        }
+                int cmp = a.resultCategory.CompareTo(b.resultCategory);
+                return cmp != 0 ? cmp : b.percentageSimilarity.CompareTo(a.percentageSimilarity);
+            });
 
-        private static T GetAssociatedObjectByValue<T>(string value, Dictionary<T, List<string>> associationList)
-        {
-            return associationList.Where(a => a.Value.Any(l => l == value)).Select(a => a.Key).FirstOrDefault();
+            if (resultsList.Count > maxResultCount)
+                resultsList.RemoveRange(maxResultCount, resultsList.Count - maxResultCount);
+
+            return resultsList;
         }
     }
 }
