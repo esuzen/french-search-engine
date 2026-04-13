@@ -114,20 +114,34 @@ namespace SearchModule
                     columnValue = GetStringWithoutSpecialChar(columnValue);
                     if (string.IsNullOrWhiteSpace(columnValue)) continue;
 
-                    dataTrie.AddWord(columnValue);
-                    words.Add(columnValue);
-
-                    // Reverse lookup (first object wins if duplicate values)
-                    if (!wordToObject.ContainsKey(columnValue))
-                        wordToObject[columnValue] = value;
-
-                    // Pre-compute Soundex (once per unique word)
-                    if (!soundexCache.ContainsKey(columnValue))
+                    // Add full value and individual words to trie
+                    // This ensures "dupon" matches "dupont" from "jean dupont"
+                    var subWords = new List<string> { columnValue };
+                    if (columnValue.Contains(" "))
                     {
-                        soundexCache[columnValue] = Soundex.GetSoundex(columnValue);
+                        foreach (var part in columnValue.Split(' '))
+                        {
+                            if (!string.IsNullOrWhiteSpace(part))
+                                subWords.Add(part);
+                        }
+                    }
 
-                        if (columnValue.Contains("ch"))
-                            soundexCache[columnValue + ":alt"] = Soundex.GetSoundex(columnValue.Replace("ch", "k"));
+                    foreach (var sw in subWords)
+                    {
+                        dataTrie.AddWord(sw);
+                        words.Add(sw);
+
+                        if (!wordToObject.ContainsKey(sw))
+                            wordToObject[sw] = value;
+
+                        // Pre-compute Soundex (once per unique word)
+                        if (!soundexCache.ContainsKey(sw))
+                        {
+                            soundexCache[sw] = Soundex.GetSoundex(sw);
+
+                            if (sw.Contains("ch"))
+                                soundexCache[sw + ":alt"] = Soundex.GetSoundex(sw.Replace("ch", "k"));
+                        }
                     }
                 }
 
