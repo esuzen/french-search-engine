@@ -1,14 +1,43 @@
 @page "/"
 
-<div class="page">
-    <div class="lang-toggle">
-        <span class="@(lang == "fr" ? "lang-active" : "lang-btn")" @onclick='() => SetLang("fr")'>FR</span>
-        <span class="@(lang == "en" ? "lang-active" : "lang-btn")" @onclick='() => SetLang("en")'>EN</span>
+<div class="page @(theme == "light" ? "light" : "")">
+    <div class="top-bar">
+        <div class="toggle-group">
+            <span class="@(lang == "fr" ? "toggle-active" : "toggle-btn")" @onclick='() => SetLang("fr")'>FR</span>
+            <span class="@(lang == "en" ? "toggle-active" : "toggle-btn")" @onclick='() => SetLang("en")'>EN</span>
+        </div>
+        <div class="toggle-group">
+            <span class="@(theme == "dark" ? "toggle-active" : "toggle-btn")" @onclick='() => theme = "dark"'>&#9790;</span>
+            <span class="@(theme == "light" ? "toggle-active" : "toggle-btn")" @onclick='() => theme = "light"'>&#9788;</span>
+        </div>
     </div>
 
     <div class="header">
         <h1>@L("title")</h1>
         <p>@L("subtitle")</p>
+    </div>
+
+    <div class="how-it-works">
+        <div class="algo-step @(HasActiveCategory(0) ? "active" : "")">
+            <div class="step-num">1</div>
+            <div class="step-label">@L("algo_exact")</div>
+        </div>
+        <div class="algo-step @(HasActiveCategory(1) ? "active" : "")">
+            <div class="step-num">2</div>
+            <div class="step-label">@L("algo_prefix")</div>
+        </div>
+        <div class="algo-step @(HasActiveCategory(2) ? "active" : "")">
+            <div class="step-num">3</div>
+            <div class="step-label">@L("algo_substring")</div>
+        </div>
+        <div class="algo-step @(HasActiveCategory(3) ? "active" : "")">
+            <div class="step-num">4</div>
+            <div class="step-label">@L("algo_similar")</div>
+        </div>
+        <div class="algo-step @(HasActiveCategory(4) ? "active" : "")">
+            <div class="step-num">5</div>
+            <div class="step-label">@L("algo_phonetic")</div>
+        </div>
     </div>
 
     <div class="dataset-tabs">
@@ -29,14 +58,14 @@
     @if (results != null && results.Count > 0)
     {
         <div class="stats">
-            <span>@results.Count @L("results")</span>
+            <span>@results.Count @L("results") @L("in") @GetActiveDataset().Count @L("entries")</span>
             <span>@elapsedMs ms</span>
         </div>
 
         <div class="results">
             @foreach (var r in results)
             {
-                var categoryName = GetCategoryName(r.resultCategory);
+                var categoryName = GetCategoryLabel(r.resultCategory);
                 var badgeClass = GetBadgeClass(r.resultCategory);
                 var barColor = GetBarColor(r.resultCategory);
 
@@ -82,6 +111,8 @@
     </div>
 
     <div class="footer">
-        <p>@L("powered_by") <a href="https://github.com/esuzen/french-search-engine" target="_blank">SearchModule.French</a> @L("powered_wasm")</p>
+        <p>@L("footer_line1") <a href="https://github.com/esuzen/french-search-engine" target="_blank">SearchModule.French</a></p>
+        <p>@L("footer_line2")</p>
+        <p>@L("footer_line3") <a href="https://github.com/esuzen/french-search-engine" target="_blank">GitHub</a></p>
     </div>
 </div>

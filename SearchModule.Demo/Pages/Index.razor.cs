@@ -9,6 +9,7 @@ namespace SearchModule.Demo.Pages
     {
         private string searchQuery = "";
         private string lang = "fr";
+        private string theme = "dark";
         private string activeTab = "people";
         private List<SearchResult<DemoItem>> results = new();
         private long elapsedMs = 0;
@@ -18,15 +19,25 @@ namespace SearchModule.Demo.Pages
         private static readonly Dictionary<string, Dictionary<string, string>> i18n = new()
         {
             ["title"] = new() { ["fr"] = "Moteur de Recherche Francais", ["en"] = "French Search Engine" },
-            ["subtitle"] = new() { ["fr"] = "Recherche multi-algorithme avec correspondance phonetique Soundex", ["en"] = "Multi-algorithm search with French Soundex phonetic matching" },
+            ["subtitle"] = new() { ["fr"] = "Tapez un mot — meme avec des fautes ou en phonetique — et voyez les 5 algorithmes trouver ce que vous cherchez.", ["en"] = "Type a word — even with typos or phonetically — and watch 5 algorithms find what you're looking for." },
             ["results"] = new() { ["fr"] = "resultats", ["en"] = "results" },
+            ["in"] = new() { ["fr"] = "sur", ["en"] = "in" },
+            ["entries"] = new() { ["fr"] = "fiches", ["en"] = "entries" },
             ["no_results"] = new() { ["fr"] = "Aucun resultat pour", ["en"] = "No results for" },
             ["try_examples"] = new() { ["fr"] = "Essayez ces exemples", ["en"] = "Try these examples" },
-            ["powered_by"] = new() { ["fr"] = "Propulse par", ["en"] = "Powered by" },
-            ["powered_wasm"] = new() { ["fr"] = "— tourne entierement dans votre navigateur via WebAssembly", ["en"] = "— running entirely in your browser via WebAssembly" },
+            ["algo_exact"] = new() { ["fr"] = "Exact", ["en"] = "Exact" },
+            ["algo_prefix"] = new() { ["fr"] = "Prefixe", ["en"] = "Prefix" },
+            ["algo_substring"] = new() { ["fr"] = "Contenu", ["en"] = "Contains" },
+            ["algo_similar"] = new() { ["fr"] = "Similaire", ["en"] = "Similar" },
+            ["algo_phonetic"] = new() { ["fr"] = "Phonetique", ["en"] = "Phonetic" },
+            ["footer_line1"] = new() { ["fr"] = "Cette demo tourne entierement dans votre navigateur grace a WebAssembly — aucun serveur, aucune donnee envoyee.", ["en"] = "This demo runs entirely in your browser via WebAssembly — no server, no data sent." },
+            ["footer_line2"] = new() { ["fr"] = "Le moteur de recherche est une librairie .NET open-source specialisee dans la recherche floue et phonetique en francais.", ["en"] = "The search engine is an open-source .NET library specialized in fuzzy and phonetic French text search." },
+            ["footer_line3"] = new() { ["fr"] = "Code source et documentation sur", ["en"] = "Source code and documentation on" },
         };
 
         private string L(string key) => i18n.ContainsKey(key) && i18n[key].ContainsKey(lang) ? i18n[key][lang] : key;
+
+        private bool HasActiveCategory(int category) => results != null && results.Exists(r => r.resultCategory == category);
 
         // --- Dataset tabs ---
 
@@ -121,13 +132,13 @@ namespace SearchModule.Demo.Pages
 
         // --- Display ---
 
-        private static string GetCategoryName(int category) => category switch
+        private string GetCategoryLabel(int category) => category switch
         {
-            0 => "exact",
-            1 => "prefix",
-            2 => "substring",
-            3 => "similar",
-            4 => "phonetic",
+            0 => L("algo_exact"),
+            1 => L("algo_prefix"),
+            2 => L("algo_substring"),
+            3 => L("algo_similar"),
+            4 => L("algo_phonetic"),
             _ => "?"
         };
 
