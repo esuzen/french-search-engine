@@ -156,24 +156,28 @@ namespace SearchModule
             {
                 foreach (var word in dataTrie.GetWords())
                 {
-                    int levenshteinDistance = LevenshteinDistance.Compute(searchString, word);
+                    bool matched = false;
 
+                    // Try similarity match first (close Levenshtein distance + high overlap)
+                    int levenshteinDistance = LevenshteinDistance.Compute(searchString, word);
                     if (levenshteinDistance < options.MaxLevenshteinDistance)
                     {
                         double stringSimilarity = CompareTwoWords(searchString, word);
                         if (stringSimilarity > similarityTolerence)
                         {
                             T associatedObject = GetAssociatedObjectByValue(word, associationList);
-                            SearchResult<T> result = new SearchResult<T>()
+                            resultsList.Add(new SearchResult<T>()
                             {
                                 resultCategory = (int)ResultCategories.Similar,
                                 objectValue = associatedObject,
                                 percentageSimilarity = stringSimilarity
-                            };
-                            resultsList.Add(result);
+                            });
+                            matched = true;
                         }
                     }
-                    else
+
+                    // Always try phonetic match if similarity didn't match
+                    if (!matched)
                     {
                         bool areSimilar = false;
                         double wordSoundex = Soundex.GetSoundex(word);
@@ -186,22 +190,27 @@ namespace SearchModule
                         else if (word.StartsWith("ch"))
                         {
                             double altWordSoundex = Soundex.GetSoundex(word.Replace("ch", "k"));
-                            double altSoundexGap = Math.Abs(searchStringSoundex - altWordSoundex);
-                            if (altSoundexGap <= soundexTolerence)
+                            if (Math.Abs(searchStringSoundex - altWordSoundex) <= soundexTolerence)
+                                areSimilar = true;
+                        }
+
+                        // Also try the reverse: if search starts with "ch" or "k", test alternative
+                        if (!areSimilar && searchString.StartsWith("k"))
+                        {
+                            double altSearchSoundex = Soundex.GetSoundex(searchString.Replace("k", "ch"));
+                            if (Math.Abs(altSearchSoundex - wordSoundex) <= soundexTolerence)
                                 areSimilar = true;
                         }
 
                         if (areSimilar)
                         {
                             T associatedObject = GetAssociatedObjectByValue(word, associationList);
-                            SearchResult<T> result = new SearchResult<T>()
+                            resultsList.Add(new SearchResult<T>()
                             {
                                 objectValue = associatedObject,
                                 resultCategory = (int)ResultCategories.Paronym,
                                 percentageSimilarity = CompareTwoWords(searchString, word)
-                            };
-
-                            resultsList.Add(result);
+                            });
                         }
                     }
                 }
