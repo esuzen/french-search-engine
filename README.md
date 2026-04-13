@@ -2,7 +2,7 @@
 
 A multi-algorithm text search engine for .NET, optimized for French language.
 
-[![CI](https://github.com/esuzen/search-module/actions/workflows/ci.yml/badge.svg)](https://github.com/esuzen/search-module/actions/workflows/ci.yml)
+[![CI](https://github.com/esuzen/french-search-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/esuzen/french-search-engine/actions/workflows/ci.yml)
 
 ## Features
 
