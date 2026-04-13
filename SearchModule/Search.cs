@@ -236,7 +236,7 @@ namespace SearchModule
                                 // Guard against Soundex false positives:
                                 // reject if character overlap is too low
                                 double sim = CompareTwoWords(searchString, word);
-                                if (sim >= 45)
+                                if (sim >= 55)
                                 {
                                     TryAddResult(obj, (int)ResultCategories.Paronym, sim);
                                 }
