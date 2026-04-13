@@ -1,0 +1,75 @@
+@page "/"
+
+<div class="page">
+    <div class="header">
+        <h1>French Search Engine</h1>
+        <p>Multi-algorithm search with French Soundex phonetic matching</p>
+    </div>
+
+    <div class="search-box">
+        <span class="search-icon">&#128269;</span>
+        <input type="text"
+               placeholder="Try typing: farmaci, dupon, marseil, filosof..."
+               value="@searchQuery"
+               @oninput="OnSearch" />
+    </div>
+
+    @if (results != null && results.Count > 0)
+    {
+        <div class="stats">
+            <span>@results.Count result@(results.Count > 1 ? "s" : "") found</span>
+            <span>@elapsedMs ms</span>
+        </div>
+
+        <div class="results">
+            @foreach (var r in results)
+            {
+                var categoryName = GetCategoryName(r.resultCategory);
+                var badgeClass = GetBadgeClass(r.resultCategory);
+                var barColor = GetBarColor(r.resultCategory);
+
+                <div class="result-card">
+                    <div>
+                        <div class="result-name">@GetDisplayName(r.objectValue)</div>
+                        <div class="result-detail">@GetDisplayDetail(r.objectValue)</div>
+                    </div>
+                    <span class="badge @badgeClass">@categoryName</span>
+                    <div class="similarity">
+                        <div class="similarity-bar">
+                            <div class="similarity-fill" style="width: @((int)r.percentageSimilarity)%; background: @barColor;"></div>
+                        </div>
+                        <span class="similarity-value">@((int)r.percentageSimilarity)%</span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(searchQuery))
+    {
+        <div class="empty-state">
+            <div class="icon">&#128528;</div>
+            <p>No results for "<strong>@searchQuery</strong>"</p>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <div class="icon">&#9650;</div>
+            <p>Type a name, city, or profession to search across 200+ entries</p>
+        </div>
+    }
+
+    <div class="examples">
+        <h3>Try these examples</h3>
+        <div class="example-chips">
+            @foreach (var example in exampleQueries)
+            {
+                <span class="chip" @onclick="() => SetQuery(example)">@example</span>
+            }
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Powered by <a href="https://github.com/esuzen/french-search-engine" target="_blank">SearchModule.French</a> running entirely in your browser via WebAssembly</p>
+    </div>
+</div>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net472;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
+    <!-- NuGet metadata -->
+    <PackageId>SearchModule.French</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Emre</Authors>
+    <Description>Multi-algorithm text search engine optimized for French language. Combines exact, prefix, substring, Levenshtein similarity, and French Soundex phonetic matching.</Description>
+    <PackageTags>search;fuzzy;phonetic;soundex;french;levenshtein;trie;text</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
