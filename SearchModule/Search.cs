@@ -196,6 +196,10 @@ namespace SearchModule
                     if (matchedObjects.Count >= maxResultCount) break;
                     if (!word.Contains(searchString)) continue;
 
+                    // Reject accidental substrings: search must cover at least 40% of the word
+                    // ("ren" in "grenoble" = 37% = rejected, "marseil" in "marseille" = 78% = ok)
+                    if (searchString.Length * 100 / word.Length < 40) continue;
+
                     T obj;
                     if (wordToObject.TryGetValue(word, out obj) && !matchedObjects.Contains(obj))
                         TryAddResult(obj, (int)ResultCategories.Substring, CompareTwoWords(searchString, word));
@@ -244,18 +248,22 @@ namespace SearchModule
                             }
                         }
 
-                        // 4b. Similarity: skip if length difference too large (can't match)
+                        // 4b. Similarity: proportional Levenshtein threshold
                         int wordLen = word.Length;
+                        int maxLen = Math.Max(searchLen, wordLen);
                         int lenDiff = Math.Abs(searchLen - wordLen);
                         if (lenDiff >= options.MaxLevenshteinDistance) continue;
 
                         int dist = LevenshteinDistance.Compute(searchString, word);
+
+                        // Reject if edit ratio > 35% of the longer word
+                        // (2 edits on a 5-letter word = 40% = rejected, 2 edits on a 7-letter word = 29% = ok)
+                        if (dist * 100 / maxLen > 35) continue;
+
                         if (dist < options.MaxLevenshteinDistance)
                         {
                             double sim = CompareTwoWords(searchString, word);
-                            // Accept if similarity is above threshold,
-                            // or if Levenshtein is very low (1-2 edits = very close words)
-                            if (sim > similarityTolerance || (dist <= 2 && sim > 50))
+                            if (sim > similarityTolerance || (dist <= 2 && sim > 60))
                                 TryAddResult(obj, (int)ResultCategories.Similar, sim);
                         }
                     }
