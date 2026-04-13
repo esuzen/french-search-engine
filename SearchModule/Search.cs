@@ -22,7 +22,7 @@ namespace SearchModule
         public double SoundexTolerance { get; set; } = 0.0001;
 
         /// <summary>Minimum similarity percentage (0-100) for Levenshtein-based matching.</summary>
-        public double SimilarityTolerance { get; set; } = 68;
+        public double SimilarityTolerance { get; set; } = 75;
 
         /// <summary>Maximum Levenshtein distance to consider two words similar.</summary>
         public int MaxLevenshteinDistance { get; set; } = 5;
@@ -222,7 +222,7 @@ namespace SearchModule
                                 // Guard against Soundex false positives:
                                 // reject if character overlap is too low
                                 double sim = CompareTwoWords(searchString, word);
-                                if (sim >= 30)
+                                if (sim >= 45)
                                 {
                                     TryAddResult(obj, (int)ResultCategories.Paronym, sim);
                                 }
@@ -239,7 +239,9 @@ namespace SearchModule
                         if (dist < options.MaxLevenshteinDistance)
                         {
                             double sim = CompareTwoWords(searchString, word);
-                            if (sim > similarityTolerance)
+                            // Accept if similarity is above threshold,
+                            // or if Levenshtein is very low (1-2 edits = very close words)
+                            if (sim > similarityTolerance || (dist <= 2 && sim > 50))
                                 TryAddResult(obj, (int)ResultCategories.Similar, sim);
                         }
                     }
